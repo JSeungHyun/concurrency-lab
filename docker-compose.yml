@@ -1,0 +1,102 @@
+name: concurrency-lab
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: coupon
+      MYSQL_USER: lab
+      MYSQL_PASSWORD: lab
+      MYSQL_ROOT_PASSWORD: root
+    command: ["--max-connections=500"]
+    ports:
+      - "${MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "${REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build: ./app
+    environment:
+      DB_HOST: mysql
+      REDIS_HOST: redis
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      TOMCAT_MAX_THREADS: ${TOMCAT_MAX_THREADS:-200}
+      VIRTUAL_THREADS: ${VIRTUAL_THREADS:-false}
+      STOCK_SLOTS: ${STOCK_SLOTS:-10}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx512m}
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 실험 간 비교가 가능하도록 앱 자원을 고정한다
+    deploy:
+      resources:
+        limits:
+          cpus: "${APP_CPUS:-2}"
+          memory: 1g
+
+  influxdb:
+    image: influxdb:1.8
+    environment:
+      INFLUXDB_DB: k6
+      INFLUXDB_HTTP_MAX_BODY_SIZE: "0"
+    ports:
+      - "8086:8086"
+    volumes:
+      - influx-data:/var/lib/influxdb
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - influxdb
+      - renderer
+
+  # 패널을 PNG 로 뽑는 헤드리스 브라우저. scripts/capture.ps1 이 쓴다.
+  renderer:
+    image: grafana/grafana-image-renderer:3.10.5
+
+  # 상시 실행하지 않는다: docker compose run --rm k6 run /scripts/issue.js
+  k6:
+    image: grafana/k6:0.57.0
+    profiles: ["k6"]
+    environment:
+      BASE_URL: http://app:8080
+      K6_OUT: influxdb=http://influxdb:8086/k6
+    volumes:
+      - ./k6:/scripts:ro
+      - ./results:/results
+    depends_on:
+      - influxdb
+
+volumes:
+  mysql-data:
+  influx-data:

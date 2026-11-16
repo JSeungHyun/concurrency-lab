@@ -1,0 +1,11 @@
+app/build/
+app/.gradle/
+.gradle/
+.idea/
+*.iml
+*.log
+.env
+.claude/settings.local.json
+
+# 실험마다 자동 생성되는 결과물 (k6 결과 JSON/MD, 비교표, Grafana 캡처)
+results/

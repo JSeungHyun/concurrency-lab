@@ -1,0 +1,197 @@
+{
+  "uid": "coupon-load",
+  "title": "Coupon Load Test",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "strategy",
+        "label": "Strategy",
+        "type": "query",
+        "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+        "query": "SHOW TAG VALUES FROM \"http_reqs\" WITH KEY = \"strategy\"",
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 2
+      },
+      {
+        "name": "run_id",
+        "label": "Run",
+        "type": "query",
+        "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+        "query": "SHOW TAG VALUES FROM \"http_reqs\" WITH KEY = \"run_id\"",
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "초당 처리량 (RPS)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "query": "SELECT count(\"value\") FROM \"http_reqs\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND \"name\" = 'issue' AND $timeFilter GROUP BY time(1s), \"strategy\" fill(none)",
+          "alias": "$tag_strategy"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "응답 시간 p50 / p95 / p99",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "lineWidth": 2 } },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "query": "SELECT percentile(\"value\", 50) AS \"p50\", percentile(\"value\", 95) AS \"p95\", percentile(\"value\", 99) AS \"p99\" FROM \"http_req_duration\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND \"name\" = 'issue' AND $timeFilter GROUP BY time(1s), \"strategy\" fill(none)",
+          "alias": "$tag_strategy $col"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "응답 상태 분포 (200 발급 / 409 매진·중복 / 503 대기 초과)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "bars", "fillOpacity": 80, "stacking": { "mode": "normal" } }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "200" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "409" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "503" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "query": "SELECT count(\"value\") FROM \"http_reqs\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND \"name\" = 'issue' AND $timeFilter GROUP BY time(1s), \"status\" fill(none)",
+          "alias": "$tag_status"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "가상 사용자 수 (VU)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "resultFormat": "time_series",
+          "query": "SELECT max(\"value\") FROM \"vus\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND $timeFilter GROUP BY time(1s), \"strategy\" fill(none)",
+          "alias": "$tag_strategy"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "barchart",
+      "title": "전략별 응답 시간 (전체 구간)",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 9 },
+      "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "fillOpacity": 85 } }, "overrides": [] },
+      "options": {
+        "xField": "strategy",
+        "orientation": "horizontal",
+        "showValue": "always",
+        "groupWidth": 0.8,
+        "barWidth": 0.9,
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }
+      },
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true } } }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT percentile(\"value\", 50) AS \"p50\", percentile(\"value\", 95) AS \"p95\", percentile(\"value\", 99) AS \"p99\" FROM \"http_req_duration\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND \"name\" = 'issue' AND $timeFilter GROUP BY \"strategy\""
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "barchart",
+      "title": "전략별 실제 발급 수 vs 쿠폰 수량",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 9 },
+      "datasource": { "type": "influxdb", "uid": "k6-influxdb" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 85 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "quantity" }, "properties": [{ "id": "displayName", "value": "쿠폰 수량" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] },
+          { "matcher": { "id": "byName", "options": "issued_rows" }, "properties": [{ "id": "displayName", "value": "실제 발급 행" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "counter" }, "properties": [{ "id": "displayName", "value": "수량 컬럼" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] }
+        ]
+      },
+      "options": {
+        "xField": "strategy",
+        "orientation": "horizontal",
+        "showValue": "always",
+        "groupWidth": 0.8,
+        "barWidth": 0.9,
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }
+      },
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true } } }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT mean(\"value\") AS \"quantity\" FROM \"coupon_total\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND $timeFilter GROUP BY \"strategy\""
+        },
+        {
+          "refId": "B",
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT mean(\"value\") AS \"issued_rows\" FROM \"coupon_issued_rows\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND $timeFilter GROUP BY \"strategy\""
+        },
+        {
+          "refId": "C",
+          "rawQuery": true,
+          "resultFormat": "table",
+          "query": "SELECT mean(\"value\") AS \"counter\" FROM \"coupon_issued_counter\" WHERE \"strategy\" =~ /^$strategy$/ AND \"run_id\" =~ /^$run_id$/ AND $timeFilter GROUP BY \"strategy\""
+        }
+      ]
+    }
+  ]
+}

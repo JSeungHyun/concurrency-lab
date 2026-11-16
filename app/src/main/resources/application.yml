@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: coupon-app
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:3306/coupon?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:lab}
+    password: ${DB_PASSWORD:lab}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      connection-timeout: 5000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+  threads:
+    virtual:
+      enabled: ${VIRTUAL_THREADS:false}
+
+server:
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:200}
+
+coupon:
+  lock-wait-ms: ${LOCK_WAIT_MS:10000}
+  optimistic-max-retries: ${OPTIMISTIC_MAX_RETRIES:100}
+  stock-slots: ${STOCK_SLOTS:10}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
