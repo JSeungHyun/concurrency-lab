@@ -138,6 +138,8 @@ function Format-Median([string]$label) {
 
 function Copy-Image([string]$label, [string]$file) {
     $src = Join-Path $resultsDir "screenshots\$($Runs[$label])\$file.png"
+    # scripts/charts.py 가 만든 비교 그래프는 results/charts 에 있다
+    if (-not (Test-Path $src)) { $src = Join-Path $resultsDir "charts\$file.png" }
     if (-not (Test-Path $src)) {
         return "> ⚠️ 이미지가 없다: ``results/screenshots/$($Runs[$label])/$file.png`` (``capture.ps1 -RunId $($Runs[$label])`` 로 생성)"
     }
